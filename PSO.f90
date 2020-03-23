@@ -144,7 +144,7 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                 do j=1,fitnum,1 
                         gbest(:,j)=pos(:,loc(j))
                         if(fparetobest(j) >  fgbest(j)) then
-                                paretoupdate+=1
+                                paretoupdate=paretoupdate+1
                         endif
                         !write(*,'(A,I1,A,22 F8.4,A,F8.4)') "Global best for ",j," : ", gbest(:,j), "  Fitness: ",fgbest(j)
                 enddo
