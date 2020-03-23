@@ -3,11 +3,11 @@ implicit none
 include 'mpif.h'
 
 integer rank, size, ierror, ppc
-integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, fdim
+integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, fdim, paretoupdate
 real :: randn, rand1, rand2, c1, c2, dt
 character*32::initialpos, formatt
 double precision, dimension(:,:), allocatable::limits, pos, pos_n, posmpi, vel, fitval, fitvalloc, lbest, gbest, flbest
-double precision, dimension(:), allocatable:: fgbest
+double precision, dimension(:), allocatable:: fgbest, paretobest, fparetobest
 integer, dimension(:), allocatable:: loc
 
 call MPI_INIT(ierror)
@@ -18,6 +18,11 @@ open(10,file="input-pso",status="old")
 read(10,*) swarmsize, maxiter, ndim
 allocate(limits(ndim,3))
 allocate(pos(ndim,swarmsize))
+allocate(paretobest(ndim))
+paretobest(:)=0.0
+paretoupdate=0
+allocate(fparetobest(fitnum))
+fparetobest(:)=1000
 allocate(pos_n(ndim,swarmsize))
 allocate(vel(ndim,swarmsize))
 read(10,*) limits(:,1)
@@ -138,12 +143,21 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                 fgbest=MINVAL(fitval, DIM=2)
                 do j=1,fitnum,1 
                         gbest(:,j)=pos(:,loc(j))
+                        if(fparetobest(j) >  fgbest(j)) then
+                                paretoupdate+=1
+                        endif
                         !write(*,'(A,I1,A,22 F8.4,A,F8.4)') "Global best for ",j," : ", gbest(:,j), "  Fitness: ",fgbest(j)
                 enddo
+                if(paretoupdate==fitnum) then
+                        paretobest(:) = gbest(:,j)
+                        fparetobest(:)= fgbest
+                endif
+
                 !write(*,*) "EPOCH ",i,": Global best for ",fdim," : ", gbest(:,fdim), "  Fitness: ",fgbest(fdim)
                 write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.3,A,",fitnum,"F8.4)"
                !write(*,*) ADJUSTL(formatt)
                 write(*,formatt) "EPOCH ",i,": Global best for ",fdim," : ",gbest(:,fdim), "  Fitness: ",fgbest
+                write(*,formatt) "EPOCH ",i,": Paretobest for ",fitnum," objectives: ",paretobest, "  Fitness: ",fparetobest
                 
                 !update velocity
                
