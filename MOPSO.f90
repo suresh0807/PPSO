@@ -3,13 +3,13 @@ implicit none
 include 'mpif.h'
 
 integer rank, size, ierror, ppc
-integer:: swarmsize, maxiter, ndim, i, j, k, fitnum
+integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, paretoupdate
 real :: randn, rand1, rand2, c1, c2, dt
-character*32::initialpos, formatt
-double precision, dimension(:,:), allocatable::limits, gbest
-double precision, dimension(:), allocatable:: fgbest
+character(len=100)::initialpos, formatt
+double precision, dimension(:,:), allocatable::limits, gbest, fgbest, paretobest, fparetobest
+double precision, dimension(:), allocatable:: paretobest, fparetobest
 double precision, dimension(:,:,:), allocatable:: pos, pos_n, vel, lbest, posmpi, fitval, flbest, fitvalloc
-integer, dimension(:), allocatable:: loc
+integer, dimension(:,:), allocatable:: loc
 
 call MPI_INIT(ierror)
 call MPI_COMM_SIZE(MPI_COMM_WORLD, size, ierror)
@@ -23,6 +23,12 @@ read(10,*) limits(:,2)
 limits(:,3) = limits(:,2)-limits(:,1)
 read(10,*) initialpos
 read(10,*) fitnum                               !Number of objective values
+
+allocate(paretobest(ndim))
+paretobest(:)=0.0
+paretoupdate=0
+allocate(fparetobest(fitnum))
+fparetobest(:)=1000
 
 allocate(pos(ndim,swarmsize,fitnum))            !position of particles per objective
 allocate(pos_n(ndim,swarmsize,fitnum)           !updated position of particles per objective
@@ -44,8 +50,8 @@ allocate(lbest(ndim,swarmsize,fitnum))          !Best position of the particle p
 allocate(gbest(ndim,fitnum))                    !Best position of the swarm per objective
 allocate(flbest(fitnum,swarmsize,fitnum))       !Best fitness values of the particle per objective
 allocate(fgbest(fitnum,fitnum))                 !Best fitness values of the swarm per objective
-allocate(loc(fitnum))
-loc(:)=0
+allocate(loc(fitnum,fitnum))
+loc(:,:)=0
 pos_n(:,:,:)=0.0
 vel(:,:,:)=0.0
 fitval(:,:,:)=1000
@@ -56,7 +62,7 @@ gbest(:,:)=0.0
 read(10,*) c1, c2, dt
 close(10)
 
-ppc=swarmsize/size
+ppc=swarmsize*fitnum/size
 if(size*ppc .NE. swarmsize) then
         write(*,*) "Number of particles must be divisible by the number of processors"
         call MPI_ABORT(MPI_COMM_WORLD,ierror)
@@ -107,8 +113,8 @@ call MPI_SCATTER(fitval, ppc*fitnum*fitnum, MPI_DOUBLE_PRECISION, fitvalloc, ppc
 call MPI_BARRIER(MPI_COMM_WORLD, ierror)
         
         !Evaluating the fitness function for the scattered data in parallel
-        do j=1,ppc,1
-                do k=1,fitnum,1
+        do k=1,fitnum,1
+                do j=1,ppc,1
                         call RANDOM_NUMBER(randn)
                         call fitness(posmpi(:,j,k),ndim,fitnum,randn,fitvalloc(:,j,k))
                         write(*,*) "slave particle ",k, j+(rank*ppc), " is processed by rank ", rank, " with fitness values:",fitvalloc(:,j,k)
@@ -127,56 +133,71 @@ call MPI_GATHER(fitvalloc, ppc*fitnum*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*
                 !        write(*,*) pos(:,j), fitval(:,j)
                 !enddo
                 if (i == 1) then
-                        do j=1,swarmsize,1
-                                do k=1,fitnum,1
-                                        flbest(k,j)= fitval(k,j)
-                                enddo
-                                lbest(:,j)=pos(:,j)
-                        enddo
+                        flbest=fitval
+                        lbest=pos
                 else
                         do j=1,swarmsize,1
-                                if(fitval(fdim,j) < flbest(fdim,j)) then !choose the local best position of particle based on fdim
-                                        flbest(fdim,j) = fitval(fdim,j)
-                                        lbest(:,j)=pos(:,j)
-                                endif
+                                do k=1,fitnum,1
+                                        if(fitval(k,j,k) < flbest(k,j,k)) then !choose the local best position of particle based on fdim
+                                                flbest(k,j,k) = fitval(k,j,k)
+                                                lbest(:,j,k)=pos(:,j,k)
+                                        endif
+                                enddo
                         enddo
                 endif
 
                 !write(*,*) "EPOCH: ",i, " Completed!"
                 
-                loc=MINLOC(fitval,DIM=2)
-                fgbest=MINVAL(fitval, DIM=2)
-                do j=1,fitnum,1 
-                        gbest(:,j)=pos(:,loc(j))
+                loc=MINLOC(fitval,DIM=3)
+                fgbest=MINVAL(fitval, DIM=3)
+                do j=1,fitnum,1 ! per fitness value
+                do k=1,fitnum,1 ! per objective
+                        gbest(:,j,k)=pos(:,loc(j,k),k)
                         !write(*,'(A,I1,A,22 F8.4,A,F8.4)') "Global best for ",j," : ", gbest(:,j), "  Fitness: ",fgbest(j)
+                enddo
                 enddo
                 !write(*,*) "EPOCH ",i,": Global best for ",fdim," : ", gbest(:,fdim), "  Fitness: ",fgbest(fdim)
                 write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.3,A,",fitnum,"F8.4)"
-               !write(*,*) ADJUSTL(formatt)
-                write(*,formatt) "EPOCH ",i,": Global best for ",fdim," : ",gbest(:,fdim), "  Fitness: ",fgbest
-                
-                !update velocity
-               
-                do j=1,swarmsize,1
-                        do k=1,ndim,1
-                                CALL RANDOM_NUMBER(rand1)
-                                CALL RANDOM_NUMBER(rand2)
-                                vel(k,j)= c1*rand1*((lbest(k,j)-pos(k,j))/dt) + c2*rand2*((gbest(k,fdim)-pos(k,j))/dt) !can be
-                                !updated to include any number of response variables
-                                pos_n(k,j)= pos(k,j) + vel(k,j)
-                                if(pos_n(k,j) < limits(k,2) .AND. pos_n(k,j) > limits(k,1)) then
-                                        pos(k,j) = pos_n(k,j)
-                                elseif(pos_n(k,j) > limits(k,2)) then
+                !write(*,*) ADJUSTL(formatt)
+                do j=1,fitnum,1
+                        write(*,formatt) "EPOCH ",i,": Global best for ",j," : ",gbest(:,j,j), "  Fitness: ",fgbest(:,j)
+                enddo
+
+                !update velocity of slave population
+                do ii=1,fitnum,1                        !each slave population
+                        do j=1,swarmsize,1
+                                paretoupdate=0
+                                do k=1,fitnum,1         !each objective value within the swarm of any population
+                                        if(fparetobest(ii) >= flbest(k,j,ii)) then
+                                                paretoupdate=paretoupdate+1
+                                        endif
+                                enddo
+                                if(paretoupdate==fitnum) then
+                                        fparetobest=flbest(:,j,ii)
+                                        paretobest=pos(:,j,ii)
+                                endif
+                                do k=1,ndim,1
                                         CALL RANDOM_NUMBER(rand1)
-                                        !pos(k,j) = limits(k,2)
-                                        pos(k,j) = limits(k,2)-(rand1 * limits(k,3))
-                                elseif(pos_n(k,j) < limits(k,1)) then        
-                                        !pos(k,j) = limits(k,1)
-                                        CALL RANDOM_NUMBER(rand1)
-                                        pos(k,j) = limits(k,1)+(rand1 * limits(k,3))
-                                endif 
+                                        CALL RANDOM_NUMBER(rand2)
+                                        vel(k,j,ii)= c1*rand1*((lbest(k,j,ii)-pos(k,j,ii))/dt) + c2*rand2*((gbest(k,ii,ii)-pos(k,j,ii))/dt) !can be
+                                        !updated to include any number of response variables
+                                        pos_n(k,j,ii)= pos(k,j,ii) + vel(k,j,ii)
+                                        if(pos_n(k,j,ii) < limits(k,2) .AND. pos_n(k,j,ii) > limits(k,1)) then
+                                                pos(k,j,ii) = pos_n(k,j,ii)
+                                        elseif(pos_n(k,j,ii) > limits(k,2)) then
+                                                CALL RANDOM_NUMBER(rand1)
+                                                !pos(k,j) = limits(k,2)
+                                                pos(k,j,ii) = limits(k,2)-(rand1 * limits(k,3))
+                                        elseif(pos_n(k,j,ii) < limits(k,1)) then        
+                                                !pos(k,j) = limits(k,1)
+                                                CALL RANDOM_NUMBER(rand1)
+                                                pos(k,j,ii) = limits(k,1)+(rand1 * limits(k,3))
+                                        endif 
+                                enddo
                         enddo
                 enddo
+                write(*,formatt) "EPOCH ",i,": Pareto best for ",fitnum," obj: ",paretobest, "  Fitness: ",fparetobest
+
         endif
         call MPI_BARRIER(MPI_COMM_WORLD,ierror)
 enddo

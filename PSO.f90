@@ -5,7 +5,7 @@ include 'mpif.h'
 integer rank, size, ierror, ppc
 integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, fdim, paretoupdate
 real :: randn, rand1, rand2, c1, c2, dt
-character*32::initialpos, formatt
+character(len=100)::initialpos, formatt
 double precision, dimension(:,:), allocatable::limits, pos, pos_n, posmpi, vel, fitval, fitvalloc, lbest, gbest, flbest
 double precision, dimension(:), allocatable:: fgbest, paretobest, fparetobest
 integer, dimension(:), allocatable:: loc
@@ -106,6 +106,7 @@ call MPI_BARRIER(MPI_COMM_WORLD, ierror)
         !Evaluating the fitness function for the scattered data in parallel
         do j=1,ppc,1
                 call RANDOM_NUMBER(randn)
+                !write(*,*) "particle ", j+(rank*ppc), " is processed by rank ", rank, "in runs/run_",randn
                 call fitness(posmpi(:,j),ndim,fitnum,randn,fitvalloc(:,j))
                 write(*,*) "particle ", j+(rank*ppc), " is processed by rank ", rank, " with fitness values:", fitvalloc(fdim,j)
                 !write(*,'(A,I3,22 F8.4,A,2 F8.4)') "particle ", j+(rank*ppc), posmpi(:,j),"  Fitness: ", fitvalloc(:,j)
@@ -150,12 +151,12 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                 enddo
                 if(paretoupdate==fitnum) then
                         paretobest(:) = gbest(:,j)
-                        fparetobest(:)= fgbest
+                        fparetobest(:)= fgbest(:)
                 endif
 
                 !write(*,*) "EPOCH ",i,": Global best for ",fdim," : ", gbest(:,fdim), "  Fitness: ",fgbest(fdim)
                 write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.3,A,",fitnum,"F8.4)"
-               !write(*,*) ADJUSTL(formatt)
+                write(*,*) ADJUSTL(formatt)
                 write(*,formatt) "EPOCH ",i,": Global best for ",fdim," : ",gbest(:,fdim), "  Fitness: ",fgbest
                 write(*,formatt) "EPOCH ",i,": Paretobest for ",fitnum," objectives: ",paretobest, "  Fitness: ",fparetobest
                 
@@ -214,7 +215,7 @@ write(FMT1,'(f11.9)') randn
 write(command,"(A, " // ADJUSTL(FMT) // " F16.9)") "./Activation.sh ",randn,pos
 write(filename,*)"runs/run_",ADJUSTL(FMT1),"/response"
 !write(*,*) ADJUSTL(command)
-!write(*,*) filename
+!write(*,*) ADJUSTL(filename)
 call EXECUTE_COMMAND_LINE(command)
 open(10,file=ADJUSTL(filename),status="old")
 read(10,*) fitval(1), fitval(2)
