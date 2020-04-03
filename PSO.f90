@@ -21,8 +21,6 @@ allocate(pos(ndim,swarmsize))
 allocate(paretobest(ndim))
 paretobest(:)=0.0
 paretoupdate=0
-allocate(fparetobest(fitnum))
-fparetobest(:)=1000
 allocate(pos_n(ndim,swarmsize))
 allocate(vel(ndim,swarmsize))
 read(10,*) limits(:,1)
@@ -37,6 +35,8 @@ else
         pos(:,:)=0.0
 endif
 read(10,*) fitnum
+allocate(fparetobest(fitnum))
+fparetobest(:)=100.00
 allocate(fitval(fitnum,swarmsize))
 allocate(lbest(ndim,swarmsize))
 allocate(gbest(ndim,fitnum))
@@ -106,9 +106,10 @@ call MPI_BARRIER(MPI_COMM_WORLD, ierror)
         !Evaluating the fitness function for the scattered data in parallel
         do j=1,ppc,1
                 call RANDOM_NUMBER(randn)
-                !write(*,*) "particle ", j+(rank*ppc), " is processed by rank ", rank, "in runs/run_",randn
+                !write(*,*) "particle ", j+(rank*ppc), " will be processed by rank ", rank, "in runs/run_",randn
                 call fitness(posmpi(:,j),ndim,fitnum,randn,fitvalloc(:,j))
-                write(*,*) "particle ", j+(rank*ppc), " is processed by rank ", rank, " with fitness values:", fitvalloc(fdim,j)
+                write(*,*) "Epoch ",i,": particle ", j+(rank*ppc), " is processed by rank ", &
+                                &rank, " with fitness values:", fitvalloc(:,j)
                 !write(*,'(A,I3,22 F8.4,A,2 F8.4)') "particle ", j+(rank*ppc), posmpi(:,j),"  Fitness: ", fitvalloc(:,j)
                 call MPI_BARRIER(MPI_COMM_WORLD,ierror)
         enddo
@@ -142,22 +143,25 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                 
                 loc=MINLOC(fitval,DIM=2)
                 fgbest=MINVAL(fitval, DIM=2)
+                paretoupdate=0
                 do j=1,fitnum,1 
                         gbest(:,j)=pos(:,loc(j))
-                        if(fparetobest(j) >  fgbest(j)) then
+                        !write(*,*) fparetobest(j),fitval(j,loc(fdim))
+                        if(fparetobest(j) >=  fitval(j,loc(fdim))) then
                                 paretoupdate=paretoupdate+1
                         endif
                         !write(*,'(A,I1,A,22 F8.4,A,F8.4)') "Global best for ",j," : ", gbest(:,j), "  Fitness: ",fgbest(j)
                 enddo
+                !write(*,*)paretoupdate, fitnum
                 if(paretoupdate==fitnum) then
-                        paretobest(:) = gbest(:,j)
-                        fparetobest(:)= fgbest(:)
+                        paretobest(:)= gbest(:,fdim)
+                        fparetobest= fitval(:,loc(fdim))
                 endif
 
                 !write(*,*) "EPOCH ",i,": Global best for ",fdim," : ", gbest(:,fdim), "  Fitness: ",fgbest(fdim)
-                write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.3,A,",fitnum,"F8.4)"
-                write(*,*) ADJUSTL(formatt)
-                write(*,formatt) "EPOCH ",i,": Global best for ",fdim," : ",gbest(:,fdim), "  Fitness: ",fgbest
+                write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.3,A,",fitnum,"F10.3)"
+                !write(*,*) ADJUSTL(formatt)
+                write(*,formatt) "EPOCH ",i,": Global best for ",fdim," : ",gbest(:,fdim), "  Fitness: ", fitval(:,loc(fdim))
                 write(*,formatt) "EPOCH ",i,": Paretobest for ",fitnum," objectives: ",paretobest, "  Fitness: ",fparetobest
                 
                 !update velocity
@@ -207,6 +211,12 @@ character(len=11) ::  FMT1
 !fitval(1)=( -47.0669 + (0.1633*pos(1)) - (0.978167*pos(2)) + (54.0917*pos(3)) - (0.000084*pos(1)*pos(1)) - (13.5625*pos(3)*pos(3)) &
 !& + (0.00065*pos(1)*pos(2)) - (0.023*pos(1)*pos(3)))
 !fitval(1)=abs((pos(1)-1526.0) * (pos(2)-163.5) * (pos(3)-0.86))
+!fitval(1)=( -47.0669 + (0.1633*pos(1)) - (0.978167*pos(2)) + (54.0917*pos(3)) -(0.000084*pos(1)*pos(1)) - (13.5625*pos(3)*pos(3)) &
+!& + (0.00065*pos(1)*pos(2)) - (0.023*pos(1)*pos(3)))
+!fitval(2)=( -37.0669 + (0.1633*pos(1)) - (0.978167*pos(2)) + (54.0917*pos(3)) -(0.000084*pos(1)*pos(1)) - (13.5625*pos(2)*pos(3)) &
+!& + (0.00065*pos(3)*pos(2)) - (0.023*pos(2)*pos(3)))
+
+
 ndim1=ndim+1
 write(FMT,*) ndim1
 write(FMT1,'(f11.9)') randn

@@ -1,4 +1,4 @@
-8 20 3 			#swarmsize maxiter ndim
+2 20 3 			#swarmsize maxiter ndim
 1450.0 150.0 0.5 
 1550.0 170.0 0.9
 no 			#provide initial positions: yes means swarmsize lines below with the coordinates
