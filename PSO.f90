@@ -4,7 +4,7 @@ include 'mpif.h'
 
 integer rank, size, ierror, ppc
 integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, fdim, paretoupdate
-real :: randn, rand1, rand2, c1, c2, dt
+real :: randn, rand1, rand2, c1, c2, dt, start, finish
 character(len=100)::initialpos, formatt
 double precision, dimension(:,:), allocatable::limits, pos, pos_n, posmpi, vel, fitval, fitvalloc, lbest, gbest, flbest
 double precision, dimension(:), allocatable:: fgbest, paretobest, fparetobest
@@ -68,7 +68,7 @@ fitvalloc(:,:)=1000
 !write(*,'(22 F8.4)') limits(:,1)
 !write(*,'(22 F8.4)') limits(:,2)
 !write(*,'(22 F8.4)') limits(:,3)
-call MPI_BARRIER(MPI_COMM_WORLD,ierror)
+!call MPI_BARRIER(MPI_COMM_WORLD,ierror)
 
 if(rank==0) then
         !Initialize Particles
@@ -99,9 +99,12 @@ call MPI_BARRIER(MPI_COMM_WORLD,ierror)
 
 
 do i=1,maxiter,1
+ if(rank == 0) then
+        call cpu_time(start)
+ endif
 call MPI_SCATTER(pos, ppc*ndim, MPI_DOUBLE_PRECISION, posmpi, ppc*ndim, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierror)
 call MPI_SCATTER(fitval, ppc*fitnum, MPI_DOUBLE_PRECISION, fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierror)
-call MPI_BARRIER(MPI_COMM_WORLD, ierror)
+!call MPI_BARRIER(MPI_COMM_WORLD, ierror)
         
         !Evaluating the fitness function for the scattered data in parallel
         do j=1,ppc,1
@@ -111,7 +114,7 @@ call MPI_BARRIER(MPI_COMM_WORLD, ierror)
                 write(*,*) "Epoch ",i,": particle ", j+(rank*ppc), " is processed by rank ", &
                                 &rank, " with fitness values:", fitvalloc(:,j)
                 !write(*,'(A,I3,22 F8.4,A,2 F8.4)') "particle ", j+(rank*ppc), posmpi(:,j),"  Fitness: ", fitvalloc(:,j)
-                call MPI_BARRIER(MPI_COMM_WORLD,ierror)
+                !call MPI_BARRIER(MPI_COMM_WORLD,ierror)
         enddo
         call MPI_BARRIER(MPI_COMM_WORLD,ierror)
         
@@ -186,6 +189,8 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                                 endif 
                         enddo
                 enddo
+                call cpu_time(finish)
+                print '("Time = ",f6.3," seconds.")',finish-start
         endif
         call MPI_BARRIER(MPI_COMM_WORLD,ierror)
 enddo
