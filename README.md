@@ -8,5 +8,5 @@ A generalized parallel PSO code
 
 If the objective function is an openMP program:
 For SLURM manager use:
-  #SBATCH --cpus-per-task=X*Y - X is the numper of cores for PSO program and Y is the number of openmp cores for the objective function
+  #SBATCH --cpus-per-task=X*Y - X is the number of cores for PSO program and Y is the number of openmp cores for the objective function
 
