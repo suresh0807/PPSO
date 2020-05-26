@@ -1,9 +1,11 @@
+  !date: 26 May 2020
 program PSO
 implicit none
 include 'mpif.h'
 
 integer rank, size, ierror, ppc
 integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, fdim, paretoupdate
+!real :: randn, rand1, rand2, c1, c2, dt, start, finish
 real :: randn, rand1, rand2, c1, c2, dt, start, finish
 character(len=100)::initialpos, formatt
 double precision, dimension(:,:), allocatable::limits, pos, pos_n, posmpi, vel, fitval, fitvalloc, lbest, gbest, flbest
@@ -79,7 +81,7 @@ if(rank==0) then
                                 !write(*,*) randn
                                 pos(j,i)=limits(j,1)+(randn * limits(j,3))
                         end do
-                        !write(*,'(22 F8.4)') pos(:,i)
+                        !write(*,'(12 F8.4)') pos(:,i)
                 enddo
         endif
         write(*,'(I3,A)') swarmsize," particles are initialized"
@@ -99,9 +101,9 @@ call MPI_BARRIER(MPI_COMM_WORLD,ierror)
 
 
 do i=1,maxiter,1
- if(rank == 0) then
-        call cpu_time(start)
- endif
+ !if(rank == 0) then
+ !       call cpu_time(start)
+ !endif
 call MPI_SCATTER(pos, ppc*ndim, MPI_DOUBLE_PRECISION, posmpi, ppc*ndim, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierror)
 call MPI_SCATTER(fitval, ppc*fitnum, MPI_DOUBLE_PRECISION, fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, 0, MPI_COMM_WORLD, ierror)
 !call MPI_BARRIER(MPI_COMM_WORLD, ierror)
@@ -111,7 +113,8 @@ call MPI_SCATTER(fitval, ppc*fitnum, MPI_DOUBLE_PRECISION, fitvalloc, ppc*fitnum
                 call RANDOM_NUMBER(randn)
                 !write(*,*) "particle ", j+(rank*ppc), " will be processed by rank ", rank, "in runs/run_",randn
                 call fitness(posmpi(:,j),ndim,fitnum,randn,fitvalloc(:,j))
-                write(*,*) "Epoch ",i,": particle ", j+(rank*ppc), " is processed by rank ", &
+                write(formatt,*) "(A,I3,A,I3,A,I3,A,",fitnum,"F10.4)"
+                write(*,formatt) "Epoch ",i,": particle ", j+(rank*ppc), " is processed by rank ", &
                                 &rank, " with fitness values:", fitvalloc(:,j)
                 !write(*,'(A,I3,22 F8.4,A,2 F8.4)') "particle ", j+(rank*ppc), posmpi(:,j),"  Fitness: ", fitvalloc(:,j)
                 !call MPI_BARRIER(MPI_COMM_WORLD,ierror)
@@ -162,7 +165,7 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                 endif
 
                 !write(*,*) "EPOCH ",i,": Global best for ",fdim," : ", gbest(:,fdim), "  Fitness: ",fgbest(fdim)
-                write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.3,A,",fitnum,"F10.3)"
+                write(formatt,*) "(A,I3,A,I3,A,",ndim,"F10.4,A,",fitnum,"F10.4)"
                 !write(*,*) ADJUSTL(formatt)
                 write(*,formatt) "EPOCH ",i,": Global best for ",fdim," : ",gbest(:,fdim), "  Fitness: ", fitval(:,loc(fdim))
                 write(*,formatt) "EPOCH ",i,": Paretobest for ",fitnum," objectives: ",paretobest, "  Fitness: ",fparetobest
@@ -189,8 +192,8 @@ call MPI_GATHER(fitvalloc, ppc*fitnum, MPI_DOUBLE_PRECISION, fitval, ppc*fitnum,
                                 endif 
                         enddo
                 enddo
-                call cpu_time(finish)
-                print '("Time = ",f6.3," seconds.")',finish-start
+                !call cpu_time(finish)
+                !print '("Time = ",f6.3," seconds.")',finish-start
         endif
         call MPI_BARRIER(MPI_COMM_WORLD,ierror)
 enddo
@@ -227,6 +230,7 @@ write(FMT,*) ndim1
 write(FMT1,'(f11.9)') randn
 !write(*,*) FMT
 !write(*,*) FMT1,"chk"
+!write(*,*) "./Activation.sh ",randn,pos
 write(command,"(A, " // ADJUSTL(FMT) // " F16.9)") "./Activation.sh ",randn,pos
 write(filename,*)"runs/run_",ADJUSTL(FMT1),"/response"
 !write(*,*) ADJUSTL(command)
@@ -234,6 +238,5 @@ write(filename,*)"runs/run_",ADJUSTL(FMT1),"/response"
 call EXECUTE_COMMAND_LINE(command)
 open(10,file=ADJUSTL(filename),status="old")
 read(10,*) fitval(1), fitval(2)
-read(10,*) fitval(3), fitval(4)
 close(10)
 end subroutine fitness
