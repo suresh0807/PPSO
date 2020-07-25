@@ -1,9 +1,9 @@
-  !date: 26 May 2020
+!july 25 : added partial initial pos read
 program PSO
 implicit none
 include 'mpif.h'
 
-integer rank, size, ierror, ppc
+integer rank, size, ierror, ppc, seednum
 integer:: swarmsize, maxiter, ndim, i, j, k, fitnum, fdim, paretoupdate
 !real :: randn, rand1, rand2, c1, c2, dt, start, finish
 real :: randn, rand1, rand2, c1, c2, dt, start, finish
@@ -28,9 +28,9 @@ allocate(vel(ndim,swarmsize))
 read(10,*) limits(:,1)
 read(10,*) limits(:,2)
 limits(:,3) = limits(:,2)-limits(:,1)
-read(10,*) initialpos
+read(10,*) initialpos, seednum
 if(initialpos == "yes") then
-        do i=1,swarmsize,1
+        do i=1,seednum,1
                 read(10,*) pos(:,i)
         enddo
 else
@@ -76,6 +76,15 @@ if(rank==0) then
         !Initialize Particles
         if(initialpos == "no") then
                 do i=1,swarmsize,1
+                        do j=1,ndim,1
+                                call RANDOM_NUMBER(randn)
+                                !write(*,*) randn
+                                pos(j,i)=limits(j,1)+(randn * limits(j,3))
+                        end do
+                        !write(*,'(12 F8.4)') pos(:,i)
+                enddo
+        else 
+                do i=seednum,swarmsize,1
                         do j=1,ndim,1
                                 call RANDOM_NUMBER(randn)
                                 !write(*,*) randn
