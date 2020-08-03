@@ -84,7 +84,7 @@ if(rank==0) then
                         !write(*,'(12 F8.4)') pos(:,i)
                 enddo
         else 
-                do i=seednum,swarmsize,1
+                do i=seednum+1,swarmsize,1
                         do j=1,ndim,1
                                 call RANDOM_NUMBER(randn)
                                 !write(*,*) randn
